@@ -34,7 +34,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
       const afterPhysical = inventory.physicalQty + body.quantity;
       if (afterPhysical < 0) throw new DomainError("INSUFFICIENT_STOCK", "Estoque físico não pode ficar negativo", 409);
       const updated = await tx.inventory.update({ where: { id: inventory.id }, data: { physicalQty: afterPhysical, version: { increment: 1 } } });
-      const movement = await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId, userId: request.userId, type: body.quantity >= 0 ? "ADJUSTMENT" : "CORRECTION", quantity: Math.abs(body.quantity), beforePhysical: inventory.physicalQty, afterPhysical: updated.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, reason: body.reason, origin: "API", idempotencyKey } });
+      const movement = await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId, userId: request.userId, type: body.quantity >= 0 ? "ADJUSTMENT" : "CORRECTION", quantity: Math.abs(body.quantity), beforePhysical: inventory.physicalQty, afterPhysical: updated.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, ...(body.reason ? { reason: body.reason } : {}), origin: "API", idempotencyKey } });
       await tx.auditLog.create({ data: { companyId, userId: request.userId, action: "INVENTORY_ADJUSTED", entityType: "Inventory", entityId: inventory.id, beforeJson: inventory, afterJson: updated, origin: "API" } });
       await tx.outboxEvent.create({ data: { companyId, eventType: "inventory.adjusted", aggregateType: "Inventory", aggregateId: inventory.id, payload: { movementId: movement.id, productId, quantity: body.quantity } } });
       return movement;
