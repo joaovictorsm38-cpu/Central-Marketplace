@@ -1,4 +1,4 @@
-export const ROLES = ["OWNER","ADMIN","OPERATOR","VIEWER"] as const;
+export const ROLES = ["OWNER", "ADMIN", "OPERATOR", "VIEWER"] as const;
 export type Role = typeof ROLES[number];
 
 export const PERMISSIONS = {
@@ -10,3 +10,5 @@ export const PERMISSIONS = {
   ORDERS_WRITE: "orders:write",
   AUDIT_READ: "audit:read"
 } as const;
+
+export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
