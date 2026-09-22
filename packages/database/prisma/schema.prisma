@@ -1,0 +1,228 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberStatus { ACTIVE INACTIVE }
+enum RoleCode { OWNER ADMIN OPERATOR VIEWER }
+enum ProductStatus { ACTIVE INACTIVE }
+enum OrderStatus { DRAFT CONFIRMED PAID PROCESSING SHIPPED DELIVERED CANCELLED }
+enum StockMovementType { ENTRY EXIT RESERVATION CONSUMPTION RELEASE ADJUSTMENT DAMAGE LOSS CORRECTION PHYSICAL_SALE }
+
+model User {
+  id           String @id @default(uuid()) @db.Uuid
+  email        String @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  memberships  CompanyMember[]
+  auditLogs    AuditLog[]
+  stockMovements StockMovement[]
+}
+
+model Company {
+  id        String @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  members   CompanyMember[]
+  products  Product[]
+  inventories Inventory[]
+  orders    Order[]
+  stockMovements StockMovement[]
+  idempotencyKeys IdempotencyKey[]
+  auditLogs AuditLog[]
+  outboxEvents OutboxEvent[]
+}
+
+model CompanyMember {
+  id        String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  userId    String @db.Uuid
+  role      RoleCode
+  status    MemberStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  company   Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  user      User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@unique([companyId,userId])
+  @@index([userId])
+}
+
+model Product {
+  id          String @id @default(uuid()) @db.Uuid
+  companyId   String @db.Uuid
+  sku         String
+  name        String
+  description String?
+  category    String?
+  brand       String?
+  barcode     String?
+  ncm         String?
+  cest        String?
+  supplier    String?
+  cost        Decimal @db.Decimal(18,4)
+  price       Decimal @db.Decimal(18,4)
+  weight      Decimal? @db.Decimal(18,4)
+  length      Decimal? @db.Decimal(18,4)
+  width       Decimal? @db.Decimal(18,4)
+  height      Decimal? @db.Decimal(18,4)
+  moq         Int?
+  leadTimeDays Int?
+  status      ProductStatus @default(ACTIVE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  inventory   Inventory?
+  orderItems  OrderItem[]
+  costHistory ProductCostHistory[]
+  priceHistory ProductPriceHistory[]
+  @@unique([companyId,sku])
+  @@index([companyId,status])
+  @@index([companyId,barcode])
+}
+
+model ProductCostHistory {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  productId String @db.Uuid
+  cost Decimal @db.Decimal(18,4)
+  effectiveAt DateTime @default(now())
+  product Product @relation(fields:[productId], references:[id], onDelete:Cascade)
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  @@index([companyId,productId,effectiveAt])
+}
+model ProductPriceHistory {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  productId String @db.Uuid
+  price Decimal @db.Decimal(18,4)
+  effectiveAt DateTime @default(now())
+  product Product @relation(fields:[productId], references:[id], onDelete:Cascade)
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  @@index([companyId,productId,effectiveAt])
+}
+
+model Inventory {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  productId String @db.Uuid
+  physicalQty Int @default(0)
+  reservedQty Int @default(0)
+  committedQty Int @default(0)
+  inTransitQty Int @default(0)
+  minQty Int @default(0)
+  maxQty Int?
+  version Int @default(0)
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  product Product @relation(fields:[productId], references:[id], onDelete:Cascade)
+  @@unique([companyId,productId])
+  @@index([companyId,physicalQty])
+}
+
+model Order {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  number String
+  status OrderStatus @default(DRAFT)
+  customerName String?
+  customerEmail String?
+  subtotal Decimal @db.Decimal(18,4) @default(0)
+  discount Decimal @db.Decimal(18,4) @default(0)
+  shipping Decimal @db.Decimal(18,4) @default(0)
+  fees Decimal @db.Decimal(18,4) @default(0)
+  total Decimal @db.Decimal(18,4) @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  items OrderItem[]
+  stockMovements StockMovement[]
+  @@unique([companyId,number])
+  @@index([companyId,status,createdAt])
+}
+model OrderItem {
+  id String @id @default(uuid()) @db.Uuid
+  orderId String @db.Uuid
+  productId String @db.Uuid
+  quantity Int
+  unitPrice Decimal @db.Decimal(18,4)
+  discount Decimal @db.Decimal(18,4) @default(0)
+  order Order @relation(fields:[orderId], references:[id], onDelete:Cascade)
+  product Product @relation(fields:[productId], references:[id], onDelete:Restrict)
+  @@index([orderId])
+  @@index([productId])
+}
+
+model StockMovement {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  inventoryId String @db.Uuid
+  productId String @db.Uuid
+  userId String? @db.Uuid
+  orderId String? @db.Uuid
+  type StockMovementType
+  quantity Int
+  beforePhysical Int
+  afterPhysical Int
+  beforeReserved Int
+  afterReserved Int
+  reason String?
+  origin String?
+  idempotencyKey String
+  businessKey String?
+  createdAt DateTime @default(now())
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  inventory Inventory @relation(fields:[inventoryId], references:[id], onDelete:Restrict)
+  product Product @relation(fields:[productId], references:[id], onDelete:Restrict)
+  user User? @relation(fields:[userId], references:[id], onDelete:SetNull)
+  order Order? @relation(fields:[orderId], references:[id], onDelete:SetNull)
+  @@unique([companyId,idempotencyKey])
+  @@index([companyId,productId,createdAt])
+  @@index([companyId,orderId])
+}
+
+model IdempotencyKey {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  key String
+  operation String
+  responseJson Json?
+  createdAt DateTime @default(now())
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  @@unique([companyId,key])
+}
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  userId String? @db.Uuid
+  action String
+  entityType String
+  entityId String
+  beforeJson Json?
+  afterJson Json?
+  origin String?
+  createdAt DateTime @default(now())
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  user User? @relation(fields:[userId], references:[id], onDelete:SetNull)
+  @@index([companyId,entityType,entityId,createdAt])
+}
+model OutboxEvent {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  eventType String
+  aggregateType String
+  aggregateId String
+  payload Json
+  occurredAt DateTime @default(now())
+  publishedAt DateTime?
+  attempts Int @default(0)
+  company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
+  @@index([publishedAt,occurredAt])
+  @@index([companyId,aggregateType,aggregateId])
+}
