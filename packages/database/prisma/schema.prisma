@@ -7,11 +7,41 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum MemberStatus { ACTIVE INACTIVE }
-enum RoleCode { OWNER ADMIN OPERATOR VIEWER }
-enum ProductStatus { ACTIVE INACTIVE }
-enum OrderStatus { DRAFT CONFIRMED PAID PROCESSING SHIPPED DELIVERED CANCELLED }
-enum StockMovementType { ENTRY EXIT RESERVATION CONSUMPTION RELEASE ADJUSTMENT DAMAGE LOSS CORRECTION PHYSICAL_SALE }
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+}
+enum RoleCode {
+  OWNER
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+enum StockMovementType {
+  ENTRY
+  EXIT
+  RESERVATION
+  CONSUMPTION
+  RELEASE
+  ADJUSTMENT
+  DAMAGE
+  LOSS
+  CORRECTION
+  PHYSICAL_SALE
+}
 
 model User {
   id           String @id @default(uuid()) @db.Uuid
