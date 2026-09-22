@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "@central/database";
+import type { Prisma } from "@prisma/client";
 import { PERMISSIONS } from "@central/shared";
 import { requirePermission } from "./tenant.js";
 import { DomainError, NotFoundError } from "./errors.js";
 
 type LockedInventory = { id: string; physicalQty: number; reservedQty: number };
-async function lockInventory(tx: typeof prisma, companyId: string, productId: string): Promise<LockedInventory> {
+async function lockInventory(tx: Prisma.TransactionClient, companyId: string, productId: string): Promise<LockedInventory> {
   const rows = await tx.$queryRawUnsafe<LockedInventory[]>('SELECT id, "physicalQty", "reservedQty" FROM "Inventory" WHERE "companyId" = $1::uuid AND "productId" = $2::uuid FOR UPDATE', companyId, productId);
   if (!rows[0]) throw new NotFoundError("Estoque do produto não encontrado");
   return rows[0];
