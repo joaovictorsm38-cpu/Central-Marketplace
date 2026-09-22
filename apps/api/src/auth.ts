@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import bcrypt from "bcryptjs";
 import { prisma } from "@central/database";
 
 export async function registerAuth(app: FastifyInstance) {
@@ -15,10 +16,14 @@ export async function registerAuth(app: FastifyInstance) {
 
   app.post("/auth/login", async (request, reply) => {
     const body = request.body as { email?: string; password?: string };
-    if (!body.email || !body.password) return reply.code(400).send({ error: "email e password são obrigatórios" });
+    if (!body.email || !body.password) {
+      return reply.code(400).send({ error: "email e password são obrigatórios" });
+    }
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
-    if (!user || user.passwordHash !== body.password) return reply.code(401).send({ error: "Credenciais inválidas" });
+    const user = await prisma.user.findUnique({ where: { email: body.email.toLowerCase().trim() } });
+    if (!user || !(await bcrypt.compare(body.password, user.passwordHash))) {
+      return reply.code(401).send({ error: "Credenciais inválidas" });
+    }
 
     const memberships = await prisma.companyMember.findMany({
       where: { userId: user.id, status: "ACTIVE" },
@@ -28,6 +33,13 @@ export async function registerAuth(app: FastifyInstance) {
     return { token, user: { id: user.id, email: user.email, name: user.name }, memberships };
   });
 }
+
 declare module "fastify" {
-  interface FastifyInstance { authenticate: (request: FastifyRequest) => Promise<void>; }
+  interface FastifyInstance {
+    authenticate: (request: FastifyRequest) => Promise<void>;
+  }
+  interface FastifyRequest {
+    userId: string;
+    companyId?: string;
+  }
 }
