@@ -50,6 +50,8 @@ before(async () => {
 });
 
 after(async () => {
+  await prisma.order.deleteMany({ where: { companyId, number: { startsWith: "TEST-ORDER-" } } });
+  await prisma.stockMovement.deleteMany({ where: { companyId, businessKey: { startsWith: "order-" } } });
   await prisma.company.delete({ where: { id: otherCompanyId } }).catch(() => undefined);
   await prisma.product.delete({ where: { id: productId } }).catch(() => undefined);
   await prisma.user.deleteMany({ where: { email: { startsWith: "viewer-" } } });
