@@ -22,16 +22,19 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/central_marketplace?schema=public
       JWT_SECRET: ci-secret
+      SEED_ADMIN_PASSWORD: ci-admin-password
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 10.15.0 }
+        with:
+          version: 10.15.0
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+        with:
+          node-version: 22
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm --filter @central/database prisma:validate
       - run: pnpm --filter @central/database prisma:generate
-      - run: pnpm --filter @central/database prisma:migrate -- --name ci
+      - run: pnpm --filter @central/database prisma:push
       - run: pnpm --filter @central/database prisma:seed
       - run: pnpm typecheck
       - run: pnpm test
