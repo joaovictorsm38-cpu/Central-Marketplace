@@ -111,7 +111,7 @@ model ProductPriceHistory {
 model Inventory {
   id String @id @default(uuid()) @db.Uuid
   companyId String @db.Uuid
-  productId String @db.Uuid
+  productId String @unique @db.Uuid
   physicalQty Int @default(0)
   reservedQty Int @default(0)
   committedQty Int @default(0)
