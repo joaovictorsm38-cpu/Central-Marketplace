@@ -155,6 +155,7 @@ model Inventory {
   updatedAt DateTime @updatedAt
   company Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
   product Product @relation(fields:[productId], references:[id], onDelete:Cascade)
+  movements StockMovement[]
   @@unique([companyId,productId])
   @@index([companyId,physicalQty])
 }
