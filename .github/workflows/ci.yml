@@ -1,0 +1,37 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: central_marketplace
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d central_marketplace"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/central_marketplace?schema=public
+      JWT_SECRET: ci-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.15.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm --filter @central/database prisma:validate
+      - run: pnpm --filter @central/database prisma:generate
+      - run: pnpm --filter @central/database prisma:migrate -- --name ci
+      - run: pnpm --filter @central/database prisma:seed
+      - run: pnpm typecheck
+      - run: pnpm test
