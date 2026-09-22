@@ -1,8 +1,15 @@
 import Fastify from "fastify";
 import { prisma } from "@central/database";
 import { registerRoutes } from "./routes.js";
+import { DomainError } from "./errors.js";
 
 const app = Fastify({ logger: true });
+
+app.setErrorHandler((error, _request, reply) => {
+  if (error instanceof DomainError) return reply.code(error.statusCode).send({ error: error.code, message: error.message });
+  app.log.error(error);
+  return reply.code(500).send({ error: "INTERNAL_ERROR", message: "Erro interno do servidor" });
+});
 
 app.get("/health", async () => ({ status: "ok", service: "central-api" }));
 app.get("/health/db", async (_request, reply) => {
