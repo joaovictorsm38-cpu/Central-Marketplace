@@ -48,9 +48,8 @@ export async function registerOrderRoutes(app: FastifyInstance) {
     const idempotencyKey = String(request.headers["idempotency-key"] ?? "");
     if (!idempotencyKey) return reply.code(400).send({ error: "Idempotency-Key é obrigatório" });
     const result = await prisma.$transaction(async tx => {
-      const movementKey = idempotencyKey + ":order";
-      const existing = await tx.stockMovement.findFirst({ where: { companyId, orderId, type: "CONSUMPTION", idempotencyKey: movementKey } });
-      if (existing) return existing;
+      const existing = await tx.stockMovement.findFirst({ where: { companyId, orderId, type: "CONSUMPTION", idempotencyKey: { startsWith: idempotencyKey + ":order:" } } });
+      if (existing) return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
       const order = await tx.order.findFirst({ where: { id: orderId, companyId }, include: { items: true } });
       if (!order) throw new NotFoundError("Pedido não encontrado");
       if (order.status === "CANCELLED") throw new DomainError("INVALID_ORDER_STATE", "Pedido cancelado", 409);
@@ -58,7 +57,7 @@ export async function registerOrderRoutes(app: FastifyInstance) {
         const inventory = await lockInventory(tx, companyId, item.productId);
         if (inventory.reservedQty < item.quantity || inventory.physicalQty < item.quantity) throw new DomainError("INVALID_STOCK_STATE", "Reserva/estoque insuficiente para consumo", 409);
         const updated = await tx.inventory.update({ where: { id: inventory.id }, data: { physicalQty: { decrement: item.quantity }, reservedQty: { decrement: item.quantity }, version: { increment: 1 } } });
-        await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId: item.productId, userId: request.userId, orderId, type: "CONSUMPTION", quantity: item.quantity, beforePhysical: inventory.physicalQty, afterPhysical: updated.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, origin: "ORDER", idempotencyKey: movementKey, businessKey: "order-consume:" + orderId + ":" + item.id } });
+        await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId: item.productId, userId: request.userId, orderId, type: "CONSUMPTION", quantity: item.quantity, beforePhysical: inventory.physicalQty, afterPhysical: updated.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, origin: "ORDER", idempotencyKey: idempotencyKey + ":order:" + item.id, businessKey: "order-consume:" + orderId + ":" + item.id } });
       }
       const updatedOrder = await tx.order.update({ where: { id: orderId }, data: { status: "PROCESSING" }, include: { items: true } });
       await tx.auditLog.create({ data: { companyId, userId: request.userId, action: "ORDER_CONSUMED", entityType: "Order", entityId: orderId, afterJson: updatedOrder, origin: "API" } });
@@ -74,9 +73,8 @@ export async function registerOrderRoutes(app: FastifyInstance) {
     const idempotencyKey = String(request.headers["idempotency-key"] ?? "");
     if (!idempotencyKey) return reply.code(400).send({ error: "Idempotency-Key é obrigatório" });
     const result = await prisma.$transaction(async tx => {
-      const movementKey = idempotencyKey + ":order";
-      const existing = await tx.stockMovement.findFirst({ where: { companyId, orderId, type: "RELEASE", idempotencyKey: movementKey } });
-      if (existing) return tx.order.findUniqueOrThrow({ where: { id: orderId } });
+      const existing = await tx.stockMovement.findFirst({ where: { companyId, orderId, type: "RELEASE", idempotencyKey: { startsWith: idempotencyKey + ":order:" } } });
+      if (existing) return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: { items: true } });
       const order = await tx.order.findFirst({ where: { id: orderId, companyId }, include: { items: true } });
       if (!order) throw new NotFoundError("Pedido não encontrado");
       if (order.status === "CANCELLED") return order;
@@ -84,7 +82,7 @@ export async function registerOrderRoutes(app: FastifyInstance) {
         const inventory = await lockInventory(tx, companyId, item.productId);
         if (inventory.reservedQty < item.quantity) throw new DomainError("INVALID_STOCK_STATE", "Reserva insuficiente para liberação", 409);
         const updated = await tx.inventory.update({ where: { id: inventory.id }, data: { reservedQty: { decrement: item.quantity }, version: { increment: 1 } } });
-        await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId: item.productId, userId: request.userId, orderId, type: "RELEASE", quantity: item.quantity, beforePhysical: inventory.physicalQty, afterPhysical: inventory.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, origin: "ORDER", idempotencyKey: movementKey, businessKey: "order-release:" + orderId + ":" + item.id } });
+        await tx.stockMovement.create({ data: { companyId, inventoryId: inventory.id, productId: item.productId, userId: request.userId, orderId, type: "RELEASE", quantity: item.quantity, beforePhysical: inventory.physicalQty, afterPhysical: inventory.physicalQty, beforeReserved: inventory.reservedQty, afterReserved: updated.reservedQty, origin: "ORDER", idempotencyKey: idempotencyKey + ":order:" + item.id, businessKey: "order-release:" + orderId + ":" + item.id } });
       }
       const updatedOrder = await tx.order.update({ where: { id: orderId }, data: { status: "CANCELLED" }, include: { items: true } });
       await tx.auditLog.create({ data: { companyId, userId: request.userId, action: "ORDER_CANCELLED", entityType: "Order", entityId: orderId, beforeJson: order, afterJson: updatedOrder, origin: "API" } });
