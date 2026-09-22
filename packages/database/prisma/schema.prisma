@@ -69,6 +69,8 @@ model Company {
   idempotencyKeys IdempotencyKey[]
   auditLogs AuditLog[]
   outboxEvents OutboxEvent[]
+  productCostHistories ProductCostHistory[]
+  productPriceHistories ProductPriceHistory[]
 }
 
 model CompanyMember {
@@ -110,6 +112,7 @@ model Product {
   company     Company @relation(fields:[companyId], references:[id], onDelete:Cascade)
   inventory   Inventory?
   orderItems  OrderItem[]
+  stockMovements StockMovement[]
   costHistory ProductCostHistory[]
   priceHistory ProductPriceHistory[]
   @@unique([companyId,sku])
